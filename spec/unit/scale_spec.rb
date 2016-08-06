@@ -1,44 +1,6 @@
 require 'spec_helper'
 require 'music-theory/scale'
 
-describe CyclicArray do
-  it 'indexing works' do
-    array = CyclicArray.new([0, 1, 2])
-
-    expect(array[-1]).to eq 2
-    expect(array[1]).to eq 1
-    expect(array[20]).to eq 2
-  end
-
-  it 'equality and mapping works' do
-    array = CyclicArray.new([0, 1, 2])
-    expect(array.map { |x| x }).to eq array
-  end
-end
-
-describe Tone do
-  it '#as_sharp returns the sharp enharmonic variant' do
-    expect(Tone.by_name('Db').as_sharp).to eq Tone.by_name('C#')
-  end
-
-  it '#as_flat returns the flat enharmonic variant' do
-    expect(Tone.by_name('C#').as_flat).to eq Tone.by_name('Db')
-  end
-end
-
-describe Mode do
-  it 'returns correct semitone positions' do
-    # major mode - degree 1 - no shift
-    expect(Mode.by_name('major').semitone_positions).to eq [3, 7]
-    # minor mode - degree 6
-    # - base tone shifts by 5 to the right
-    # - semitones shift  by 5 to the left
-    # - 3 - 5 % 7 = -2 % 7 = 5
-    # - 7 - 5 % 7 =  2 % 7 = 2
-    expect(Mode.by_name('minor').semitone_positions).to eq [2, 5]
-  end
-end
-
 describe Scale do
   def tone_seq_for(scale)
     tones = scale.tones.map(&:name).join(' ')
@@ -92,13 +54,6 @@ describe Scale do
         Scale::SEMITONES
         .map { |tone| Scale.new(tone) }
         .group_by { |scale| scale.accidentals.count }
-
-      # pp scales_by_accidental_count.to_a
-      #   .sort_by { |(num_of_accidentals, _)| num_of_accidentals }
-      #   .map {|(num_of_accidentals, scales)| [num_of_accidentals, scales.map { |scale|
-      #     [scale, scale.accidentals] }] }
-
-      # pp scales_with_accidentals
 
       # flats sequence
 
