@@ -6,6 +6,20 @@ require 'dry-types'
 # tone = pitch - the height of the sound (don't consider overtones now)
 # note = tone + length - e.g. half C# note
 
+class CyclicArray < Array
+  def [](index)
+    super(index % size)
+  end
+
+  def []=(index, value)
+    super(index % size, value)
+  end
+
+  def map(&block)
+    self.class.new(super)
+  end
+end
+
 module Types
   include Dry::Types.module
 
@@ -16,7 +30,7 @@ class Tone
   extend  Dry::Initializer::Mixin
   include Dry::Equalizer(:base_name, :accidental)
 
-  NAMES       = %w[A B C D E F G]
+  NAMES       = CyclicArray.new(%w[A B C D E F G])
   ACCIDENTALS = { none: nil, sharp: '#', flat: 'b' }
 
   param :base_name,  type: Types::String.enum(*NAMES)
@@ -31,6 +45,30 @@ class Tone
 
   def name
     "#{base_name}#{ACCIDENTALS[accidental]}"
+  end
+
+  def sharp?
+    accidental == :sharp
+  end
+
+  def flat?
+    accidental == :flat
+  end
+
+  def as_sharp
+    if flat?
+      self.class.new(NAMES[NAMES.index(base_name) - 1], :sharp)
+    else
+      self
+    end
+  end
+
+  def as_flat
+    if sharp?
+      self.class.new(NAMES[NAMES.index(base_name) + 1], :flat)
+    else
+      self
+    end
   end
 
   def inspect
@@ -98,17 +136,19 @@ def Mode(desc)
 end
 
 class Scale
-  SEMITONES = %w[A A# B C C# D D# E F F# G G#].map { |name| Tone.by_name(name) }
+  SEMITONES = CyclicArray.new(%w[A A# B C C# D D# E F F# G G#]
+    .map { |name| Tone.by_name(name) })
 
-  attr_reader :base_tone, :mode
+  attr_reader :base_tone, :mode, :flat
 
-  def initialize(base_tone, mode = :major)
+  def initialize(base_tone, mode = :major, flat: false)
     @base_tone = Tone(base_tone)
     @mode      = Mode(mode)
+    @flat      = flat
   end
 
   def tones
-    @_tones = Array.new(7) { |i| nth_tone(i + 1) }
+    @_tones = _tones
   end
 
   # 1-based
@@ -116,15 +156,28 @@ class Scale
     base_index = SEMITONES.index(base_tone)
     distance   = semitone_distance(n)
 
-    SEMITONES[(base_index + distance) % SEMITONES.count]
+    SEMITONES[(base_index + distance)]
   end
 
   def accidentals
     tones.select { |t| t.accidental != :none }
   end
 
+  def as_flat
+    self.class.new(base_tone, mode, flat: true)
+  end
+
   def inspect
-    "<#{self.class.name} #{base_tone.name} #{mode.human_name}>"
+    tone = flat ? base_tone.as_flat : base_tone
+    "<#{self.class.name} #{tone} #{mode.human_name}>"
+  end
+
+  def self.previous_semitone(tone)
+    SEMITONES[(SEMITONES.index(tone.as_sharp) - 1)]
+  end
+
+  def self.next_semitone(tone)
+    SEMITONES[(SEMITONES.index(tone.as_sharp) + 1)]
   end
 
   private
@@ -132,5 +185,10 @@ class Scale
   # 1-based
   def semitone_distance(tone_num)
     (tone_num - 1) * 2 - mode.semitone_positions.count { |pos| pos < tone_num }
+  end
+
+  def _tones
+    tones = Array.new(7) { |i| nth_tone(i + 1) }
+    flat ? tones.map(&:as_flat) : tones
   end
 end
