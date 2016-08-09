@@ -20,8 +20,34 @@ class Tone
     raise "#{name} is not a proper tone name"
   end
 
+  # 1-based position
+  def self.variant(position, accidental)
+    group = SEMITONES[position - 1]
+
+    case accidental
+    when :none, :sharp then group[0]
+    when :flat  then group[1]
+    when :force_sharp
+      hidden = group[2]
+      hidden && hidden.sharp? ? hidden : group[0]
+    when :force_flat
+      hidden = group[2]
+      hidden && hidden.flat?  ? hidden : group[1]
+    end
+  end
+
+  # [<canonical # form>, <canonical b form>, <hidden #/b form if present>]
+  SEMITONES = CyclicArray.new([['A', 'A'],       ['A#', 'Bb'], ['B', 'B', 'Cb'], ['C', 'C', 'B#'],
+                               ['C#', 'Db'],     ['D', 'D'],   ['D#', 'Eb'],     ['E', 'E', 'Fb'],
+                               ['F', 'F', 'E#'], ['F#', 'Gb'], ['G', 'G'],       ['G#', 'Ab']]
+    .map { |group| group.map { |name| by_name(name) } })
+
   def name
     "#{base_name}#{ACCIDENTALS[accidental]}"
+  end
+
+  def plain?
+    accidental == :none
   end
 
   def sharp?
@@ -32,20 +58,28 @@ class Tone
     accidental == :flat
   end
 
+  def forced?
+    !plain? && variant(accid: accidental).plain?
+  end
+
+  def previous_semitone
+    variant(pos: position - 1)
+  end
+
+  def next_semitone
+    variant(pos: position + 1)
+  end
+
   def as_sharp
-    if flat?
-      self.class.new(NAMES[NAMES.index(base_name) - 1], :sharp)
-    else
-      self
-    end
+    variant(accid: :sharp)
   end
 
   def as_flat
-    if sharp?
-      self.class.new(NAMES[NAMES.index(base_name) + 1], :flat)
-    else
-      self
-    end
+    variant(accid: :flat)
+  end
+
+  def ===(other)
+    self.variant(accid: :sharp) == other.variant(accid: :sharp)
   end
 
   def inspect
@@ -54,6 +88,15 @@ class Tone
 
   def to_s
     name
+  end
+
+  # 1-based
+  def position
+    @_position = SEMITONES.index { |tones| tones.include?(self) } + 1
+  end
+
+  def variant(pos: position, accid: accidental)
+    self.class.variant(pos, accid)
   end
 end
 

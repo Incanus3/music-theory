@@ -8,48 +8,55 @@ require_relative 'mode'
 # note = tone + length - e.g. half C# note
 
 class Scale
-  SEMITONES = CyclicArray.new(%w[A A# B C C# D D# E F F# G G#]
-    .map { |name| Tone.by_name(name) })
+  def self.sequence(size, start, step, accidental = :sharp)
+    start = start.position if start.is_a?(Tone)
+    Array.new(size) { |i| Tone.variant(start + step * i, accidental) }
+  end
 
-  attr_reader :base_tone, :mode, :flat
+  SHARPS_SEQUENCE = sequence(7, Tone.by_name('F#'),  7, :force_sharp)
+  FLATS_SEQUENCE  = sequence(7, Tone.by_name('Bb'), -7, :force_flat)
 
-  def initialize(base_tone, mode = :major, flat: false)
+  SHARP_SCALE_BASES = sequence(8, Tone.by_name('C'),  7, :sharp)
+  FLAT_SCALE_BASES  = sequence(8, Tone.by_name('C'), -7, :force_flat)
+
+  attr_reader :base_tone, :mode
+
+  def initialize(base_tone, mode = :major)
     @base_tone = Tone(base_tone)
     @mode      = Mode(mode)
-    @flat      = flat
   end
 
   def tones
     @_tones = _tones
   end
 
+  def sharp?
+    !flat?
+  end
+
+  def flat?
+    base_tone.flat? || base_tone == Tone.by_name('F')
+  end
+
   # 1-based
   def nth_tone(n)
-    base_index = SEMITONES.index(base_tone)
-    distance   = semitone_distance(n)
+    position = base_tone.position + semitone_distance(n)
+    variant  = flat? ? :flat : :sharp
 
-    SEMITONES[(base_index + distance)]
+    Tone.variant(position, variant)
   end
 
+  # this now breaks for non-major scales
   def accidentals
-    tones.select { |t| t.accidental != :none }
-  end
-
-  def as_flat
-    self.class.new(base_tone, mode, flat: true)
+    @_accidentals = _accidentals
   end
 
   def inspect
-    tone = flat ? base_tone.as_flat : base_tone
-    "<#{self.class.name} #{tone} #{mode.human_name}>"
+    "<#{self.class.name} #{self}>"
   end
 
-  def self.previous_semitone(tone)
-    SEMITONES[(SEMITONES.index(tone.as_sharp) - 1)]
-  end
-
-  def self.next_semitone(tone)
-    SEMITONES[(SEMITONES.index(tone.as_sharp) + 1)]
+  def to_s
+    "#{base_tone} #{mode.human_name}"
   end
 
   private
@@ -60,7 +67,17 @@ class Scale
   end
 
   def _tones
-    tones = Array.new(7) { |i| nth_tone(i + 1) }
-    flat ? tones.map(&:as_flat) : tones
+    tones  = Array.new(7) { |i| nth_tone(i + 1) }
+    forced = accidentals.select(&:forced?)
+
+    tones.map { |tone| forced.find { |accid| tone === accid } || tone }
+  end
+
+  def _accidentals
+    if sharp?
+      SHARPS_SEQUENCE.take(SHARP_SCALE_BASES.index(base_tone))
+    else
+      FLATS_SEQUENCE.take(FLAT_SCALE_BASES.index(base_tone))
+    end
   end
 end
